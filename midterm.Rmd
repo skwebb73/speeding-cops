@@ -1,0 +1,325 @@
+---
+title: "Midterm MEJO 570"
+author: "Susie Webb"
+date: "2022-10-02"
+output: html_document
+---
+
+This project was completed as a midterm assignment for my data journalism class.
+
+The data and analysis performed here is based on the 2012 Sun Sentinel reporting that found cops were among Florida's worst speeders. 
+
+The data used in this report is a recreation of the work the Sun Sentinel reporters did for that story. Sun Sentinel only posted an abbreviated part of the data used in their analysis, so the numbers found in this report differ from the 2012 final article. 
+
+The data used for this report is limited and does not reflect any real-world scenario. It was completed for academic purposes as a class assignment. 
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+##Checking the working directory:
+```{r}
+getwd()
+```
+
+##Loading the packages
+```{r}
+pacman::p_load(lubridate, 
+               janitor, 
+               tidyverse, 
+               dplyr, 
+               rio,
+               ggplot2)
+```
+
+##Loading the data
+```{r}
+
+speedcops <- read_csv("speeding-cops-data.csv")
+```
+
+##Formatting/cleaning the data
+```{r}
+str(speedcops)
+speedcops$cleaned_date <- mdy(speedcops$date ) #cleaned the data to R version
+speedcops <- subset(speedcops, select=-...10) #got rid of extra variable
+```
+
+
+#Getting to know what is in the data
+```{r}
+summary(speedcops)
+```
+
+##1. “A three-month Sun Sentinel investigation found almost 800 cops from a dozen agencies driving 90 to 130 mph on our highways.”
+```{r}
+max(speedcops$cleaned_date) #last date in dataframe
+min(speedcops$cleaned_date) #first date in dataframe 
+
+difftime(max(speedcops$cleaned_date), min(speedcops$cleaned_date), unit = "weeks")
+
+#the time period of the data included is just over 59 weeks
+
+speedcops %>%
+  group_by(agency, transponder) %>%
+  count() %>%
+  arrange(desc(n)) #to find the number of transponders
+
+#There are 334 distinct transponders in the dataframe who drove 90 to 130 mph.
+
+speedcops %>%
+  group_by(agency) %>%
+  count() %>%
+  arrange(desc(n)) #to find the number of agencies
+
+#There are 11 agencies in the data
+
+##Overall: A near 60-week span of the Sun Sentinel investigation found that 334 cars from almost a dozen different agencies hit speeds of 90 to 130 mph.
+  
+
+```
+
+
+##2. “793 transponders assigned to police agencies from Miami-Dade to Palm Beach counties showed evidence of speeding — and habitual speeding by some officers. 
+```{r}
+speedcops %>%
+  group_by(agency, transponder) %>%
+  count() %>%
+  arrange(desc(n)) #to find the transponders
+
+#There are 334 transponders in the data frame. This is the number of transponders that showed evidence of speeding and were included in the published data.
+```
+
+
+##3.“One out of five police cars hit speeds above 90 mph.”
+```{r}
+speedcops %>%
+  mutate(above90 = case_when(
+    mph > 90 ~ "yes",
+    mph <= 90 ~ "no")) %>%
+    tabyl(above90)
+
+#In the abbreviated Sun Sentinel data, only 6% of police cars hit speeds above 90 mph.
+```
+
+
+##4. “Total high-speed incidents: 5,100 in a 13-month period.”
+```{r}
+#A high-speed incident is defined as an incident over 90 mph
+
+speedcops %>%
+  filter(mph > 90) %>%
+  nrow() #counts number of cases where mph was above 90
+
+#There were 4,432 high speed incidents
+
+difftime(max(speedcops$cleaned_date), min(speedcops$cleaned_date), unit = "weeks") #To determine the timeframe of the dataset 
+
+#There were a total of 4,432 high-speed incidents in which cars were going above 90 mph in a 59-week period.
+
+
+```
+
+
+##5. “Most of the high speeds — 96 percent — were between 90 and 110 mph.”
+```{r}
+speedcops %>%
+  filter(mph > 90) %>% #filtered data for high speed incidents over 90 mph 
+  mutate(highbetween = case_when(
+    mph < 110 ~ "yes", #cases below 110 is yes
+    mph >= 110~ "no")) %>% #cases above 110 is no 
+    tabyl(highbetween)
+
+#Of the high speeds that were over 90 mph, 96.6 percent of the speeds were between 90 and 110 mph.
+
+```
+
+##6. “More than half of the high-speed incidents involved city cops outside their jurisdictions, many of them driving regular routes most likely to or from work.”
+```{r}
+#from chat 
+speedcops %>%
+  filter(mph > 90) %>%
+  nrow() #There were 4432 total high speed incidents 
+
+regular <- speedcops %>%
+  filter(mph > 90) %>% #Filtered just for high speed incidents greater than 90 mph
+  group_by(transponder, from, to) %>% #groups by transponder and a certain path
+  count() %>%
+  arrange(desc(n))
+regular
+
+summary(regular) #Ran summary command on regular. Found that the max number of speeding incidents on one route by one transponder was 145. 
+
+#I will define a regular route as a route taken more than 5 times 
+
+regular %>%
+  filter(n > 5) #There were 141 transponders who sped at least 5 times over 90 mph on the same route. 
+
+sum(regular$n >5)/sum(regular$n)#high speed incidents that were regulars/high speed incidents total
+
+#Overall: Many of the high speed above 90 mph incidents occurred on routes that were trafficked multiple times. One transponder sped above 90 mph on the same route 145 times. There were 141 transponders who sped at least 10 times over 90 mph on the same route representing about 3.2 percent of total high speed incidents. 
+
+
+
+```
+
+
+##7. “Almost 30 percent of the transponders assigned to the Palm Beach County Sheriff's Office showed speeds above 90 mph, mostly within the county.”
+```{r}
+speedcops %>%
+  filter(agency == "PBSO") %>% #filtered for Palm Beach County Sheriff's Office
+  mutate(above90 = case_when(
+    mph > 90 ~ "yes",
+    mph <= 90 ~ "no")) %>%
+    tabyl(above90)
+
+#Nearly 1.4 percent of the transponders assigned to Palm Beach County Sheriff's Office showed speeds above 90 mph.
+  
+```
+
+
+##8. “At the Broward Sheriff's Office, 18 percent of the transponders registered speeds above 90 and as high as 122 mph, the SunPass analysis found.”
+```{r}
+speedcops %>%
+  filter(agency == "BSO") %>% #filtered for Broward Sheriff's Office
+  arrange(desc(mph)) #the highest speed hit by a car at the Broward Sheriff's Office is 122 mph
+
+speedcops %>%
+  filter(agency == "BSO") %>% #filtered for Broward Sheriff's Office
+   mutate(between = case_when(
+    mph > 90  ~ "yes",
+    mph <= 90 ~ "no")) %>%
+    tabyl(between)
+
+#8.5 percent of transponders registered speeds above 90 and as high as 122 mph at the Broward Sheriff's Office.
+```
+
+
+##9. “Cops drove the fastest from late at night to 6 a.m., when shifts change and traffic is lightest.”
+```{r}
+hours <- speedcops %>%
+  group_by(hour=hour(start_time)) %>% #hour function pulls just the hour out
+  summarize(max = max(mph), average=mean(mph)) %>%
+  arrange(desc(average)) #created hour dataframe that shows max/average mph during each hour in the 24 hour clock
+
+ggplot(hours, aes(x=hour, y=average)) +
+  geom_col() #plotted the average mph for each hour to see when the fastest average times were
+
+ggplot(hours, aes(x=hour, y=max)) +
+  geom_col() #plotted the max mph for each hour to see when the fastest mph was each hour
+
+#The above helps visualize the average and maximum speeds at a given time point in the day. Upon visually looking at the ggplot graphs it does appear cars are driving the fastest from late at night (around 10 pm) to 6 a.m..
+
+
+#A more data-driven way to do it:
+
+speedcops %>%
+  group_by(hour=hour(start_time)) %>% #grouped dataset into hours
+  filter(mph > 90) %>% #i'm only interested in high speed incidents above 90 mph
+  summarize(trips = n()) %>%
+  arrange(desc(trips))
+
+#The top hours in which the speeding occurred were 3-6:00 and midnight to 1:00. 2:00 p.m. was the seventh most popular time for speeding, but beyond that all other top-10 hours for speeding among cars occurred between 8 p.m. and 6 a.m.
+
+```
+
+##10. “Miami officers were among the most chronic speeders, with 143 of them driving over 90 mph — all outside city limits, the SunPass analysis found. More than 50 Miami cops broke 100 mph — one more than 100 times.
+```{r}
+speedcops %>%
+  filter(agency == "Miami PD") %>%
+  group_by(transponder) %>%
+  filter(mph > 90) %>%
+  count() #73 transponders drove over 90 mph among Miami Police Department officers.
+
+speedcops %>%
+  group_by(agency) %>%
+  filter(mph > 90) %>%
+  count() %>%
+  arrange(desc(n)) #This shows that Miami PD has some of the most high speed instances of cars going above 90 mph.This helps prove that they were some of the most chronic speeders compared to other departments.
+
+speedcops %>%
+  filter(agency == "Miami PD") %>%
+  filter(mph > 100) %>%
+  group_by(transponder)%>%
+  count() %>%
+  arrange(desc(n))#35 distinct transponders broke 100 mph at least once. One transponder broke 100 mph 153 times. 
+
+#Overall: The Miami Police Department had some of the most chronic speeders, and 73 Miami PD transponders drove over 90 mph. Additionally, 35 distinct transponders broke 100 mph at least once. One transponder broke 100 mph 153 times. 
+
+
+```
+
+
+##11. “The Miami cop who drove the fastest on the turnpike hit 125 mph one morning about 4 a.m.”
+```{r}
+speedcops %>%
+  filter(agency == "Miami PD") %>%
+  arrange(desc(mph))
+
+#The Miami transponder who was driving the fastest went 125.5 mph one morning at 3:49 a.m. This was found by looking in the tibble below at the start_time for the fastest driving car.
+```
+
+
+##12.  “The speed leader on the Gratigny Expressway reached 117 mph and drove over 100 mph on 36 days.”
+```{r}
+speedcops %>% 
+  group_by(transponder) %>%
+  filter(mph > 100) %>%
+  count() %>%
+  arrange(desc(n)) #Of the transponders that went above 100 mph, transponder 057483550110	sped the most often at 153 times. I used this to define speed leader as 057483550110
+
+speedcops %>% 
+  filter(transponder == "057483550110") %>%
+  filter(mph > 100) %>%
+  arrange(desc(mph))%>%
+  distinct(cleaned_date, .keep_all = TRUE) #this gets rid of repeat dates
+
+#The speed leader over the number of transponders who went above 100 mph most frequently reached a maximum speed of 120 mph. This transponder drove over 100 mph on 114 distinct days.  
+  
+```
+
+
+##13. “At the Miami Beach Police Department, 54 officers drove over 90 mph as far away as Palm Beach County, the analysis found. Many hit speeds over 100 mph.”
+```{r}
+speedcops %>%
+  filter(agency == "Miami Beach PD") %>% #filtered by Miami Beach Police Department
+  group_by(transponder) %>%
+  filter(mph > 90) %>%
+  count() #30 officers drove over 90 mph
+
+speedcops %>%
+  filter(agency == "Miami Beach PD") %>%
+  group_by(transponder) %>%
+  filter(mph > 100) %>%
+  count() #19 officers drove above 100 mph
+
+#At the Miami Beach Police Department, 30 officers drove over 90 mph. Of those, 19 transponders went over 100 mph.
+```
+
+
+##14. . “More than 270 Miami-Dade cops drove over 90 mph and as fast as 115 mph.”
+```{r}
+speedcops %>%
+  group_by(transponder) %>%
+  filter(agency == "Miami-Dade PD") %>% #filtered to Miami Dade police 
+  filter(mph > 90) %>%
+  count() #84 Miami-Dade cars drove over 90 mph
+
+speedcops %>%
+  filter(agency == "Miami-Dade PD") %>%
+  arrange(desc(mph)) #The fastest Miami-Dade cars drove 115.2 mph. 
+
+#Nearly 85 Miami-Date cars drove over 90 mph, some driving as fast as 115 mph. 
+
+
+```
+
+
+##15.  “Florida Highway Patrol troopers drove the fastest among the cops examined, at speeds as high as 130 mph, according to the SunPass records.”
+```{r}
+speedcops %>%
+  arrange(desc(mph))
+
+#The top two speeders were both from Florida Highway Patrol, and both of these top speeders reached speeds near 130 mph. 
+```
+
